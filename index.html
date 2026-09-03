@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>个人项目看板</title>
+<meta name="description" content="个人项目看板：项目、任务、时间记录与昨日回顾（Supabase）" />
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#1e40af" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="看板" />
+<link rel="apple-touch-icon" href="./icons/icon-192.png" />
+<link rel="icon" type="image/png" href="./icons/icon-192.png" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="./config.js"></script>
+<style>
+html,body{height:100%}
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f7fa;color:#1f2937}
+.es{transition:background-color .2s,color .2s,border-color .2s,opacity .2s}
+.card{box-shadow:0 1px 3px rgba(17,24,39,.06)}
+.scroll::-webkit-scrollbar{width:6px}
+.scroll::-webkit-scrollbar-thumb{background:#d1d5db;border-radius:8px}
+.task.drag{opacity:.45}
+.drop.ok[data-status=todo]{outline:2px dashed #3b82f6}
+.drop.ok[data-status=doing]{outline:2px dashed #a855f7}
+.drop.ok[data-status=done]{outline:2px dashed #22c55e}
+</style>
+</head>
+<body class="h-screen overflow-hidden">
+
+<!-- 登录遮罩 -->
+<div id="auth" class="hidden fixed inset-0 z-[60] flex-col items-center justify-center bg-slate-800/60 p-4">
+  <div class="bg-white rounded-xl card w-full max-w-sm p-6">
+    <h1 class="text-xl font-bold text-center">个人项目看板</h1>
+    <p class="text-sm text-gray-400 text-center mb-5">登录以访问数据（Supabase · RLS）</p>
+    <label class="block text-sm mb-1">邮箱</label>
+    <input id="em" type="email" autocomplete="username" class="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm mb-3" placeholder="you@example.com" />
+    <label class="block text-sm mb-1">密码</label>
+    <input id="pw" type="password" autocomplete="current-password" class="w-full h-10 rounded-lg border border-slate-200 px-3 text-sm mb-4" placeholder="至少 6 位" />
+    <button id="bIn" type="button" class="es w-full h-10 rounded-lg bg-slate-900 text-white text-sm mb-2">登 录</button>
+    <button id="bUp" type="button" class="es w-full h-10 rounded-lg bg-blue-600 text-white text-sm">注册新账号</button>
+    <p id="emsg" class="text-xs text-red-500 min-h-[1rem] mt-3 text-center"></p>
+    <p class="text-[11px] text-gray-400 text-center">注册若需邮箱确认，请先到邮箱确认再登录。</p>
+  </div>
+</div>
+
+<!-- 顶栏 -->
+<div id="bar" class="hidden h-10 px-4 border-b border-slate-200 items-center justify-between text-sm bg-white/80" style="display:none">
+  <span class="text-sm font-semibold">个人项目看板</span>
+  <span class="flex items-center gap-3"><span id="uemail" class="text-gray-500"></span>
+  <button id="out" type="button" class="es px-3 h-7 rounded-lg border border-slate-200 text-xs hover:bg-gray-100">退出登录</button></span>
+</div>
+
+<div class="flex gap-4 p-4" style="height:calc(100% - 40px)">
+
+  <!-- 项目栏 -->
+  <aside class="w-64 flex flex-col min-h-0 bg-white rounded-lg border border-slate-200 card overflow-hidden">
+    <div class="px-4 py-3 border-b border-slate-100 font-semibold text-sm">我的项目</div>
+    <div id="plist" class="flex-1 overflow-y-auto scroll p-2 space-y-2"></div>
+    <div class="p-2 border-t border-slate-100"><button id="addP" type="button" class="es w-full h-9 rounded-lg border border-dashed border-slate-300 text-xl text-gray-400 hover:border-blue-500 hover:text-blue-500">+</button></div>
+  </aside>
+
+  <!-- 任务看板 -->
+  <main class="flex-1 min-w-0 flex gap-3">
+    <section class="w-1/3 bg-white rounded-lg border border-slate-200 card flex flex-col min-h-0 overflow-hidden">
+      <header class="flex items-center gap-2 px-4 py-3 border-b border-slate-100"><span class="w-2 h-2 rounded bg-blue-500"></span><span class="text-sm font-semibold">待办</span><span class="cnt ml-auto min-w-5 text-center text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">0</span><button data-at="todo" class="es ml-1 w-6 text-gray-400 hover:text-blue-600">+</button></header>
+      <div data-status="todo" class="drop scroll flex-1 overflow-y-auto p-2 space-y-2"></div>
+    </section>
+    <section class="w-1/3 bg-white rounded-lg border border-slate-200 card flex flex-col min-h-0 overflow-hidden">
+      <header class="flex items-center gap-2 px-4 py-3 border-b border-slate-100"><span class="w-2 h-2 rounded bg-purple-500"></span><span class="text-sm font-semibold">进行中</span><span class="cnt ml-auto min-w-5 text-center text-xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600">0</span><button data-at="doing" class="es ml-1 w-6 text-gray-400 hover:text-purple-600">+</button></header>
+      <div data-status="doing" class="drop scroll flex-1 overflow-y-auto p-2 space-y-2"></div>
+    </section>
+    <section class="w-1/3 bg-white rounded-lg border border-slate-200 card flex flex-col min-h-0 overflow-hidden">
+      <header class="flex items-center gap-2 px-4 py-3 border-b border-slate-100"><span class="w-2 h-2 rounded bg-green-500"></span><span class="text-sm font-semibold">已完成</span><span class="cnt ml-auto min-w-5 text-center text-xs px-1.5 py-0.5 rounded-full bg-green-100 text-green-600">0</span><button data-at="done" class="es ml-1 w-6 text-gray-400 hover:text-green-600">+</button></header>
+      <div data-status="done" class="drop scroll flex-1 overflow-y-auto p-2 space-y-2"></div>
+    </section>
+  </main>
+
+  <!-- 时间轴 + 饼图 -->
+  <aside class="w-96 flex flex-col gap-3 min-h-0">
+    <div class="flex-1 min-h-0 bg-white rounded-lg border border-slate-200 card flex flex-col overflow-hidden">
+      <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+        <h2 class="font-semibold text-sm">每日时间轴</h2>
+        <div class="flex items-center gap-1 text-xs">
+          <button data-day="-1" class="es w-6 h-6 rounded-md border border-slate-200 hover:bg-gray-100">‹</button>
+          <span id="vday" class="min-w-[104px] text-center text-gray-600 font-medium"></span>
+          <button data-day="1" class="es w-6 h-6 rounded-md border border-slate-200 hover:bg-gray-100">›</button>
+          <button id="btoday" class="es px-2 h-6 rounded-md border border-slate-200 text-gray-500 hover:bg-gray-100 ml-1">今天</button>
+        </div>
+      </div>
+      <div id="tl" class="scroll flex-1 overflow-y-auto p-3 space-y-2"></div>
+      <div class="p-2 border-t border-slate-100"><button id="addTimeBtn" type="button" class="es w-full h-10 rounded-xl bg-slate-900 text-white text-sm">+ 添加时间块</button></div>
+    </div>
+    <div class="bg-white rounded-lg border border-slate-200 card p-3">
+      <h2 class="text-sm font-semibold mb-2">当日时间分布</h2>
+      <div class="flex items-start">
+        <div style="width:170px;height:170px"><canvas id="pie" width="170" height="170"></canvas></div>
+        <div id="pieL" class="flex-1 min-w-0 text-xs space-y-1.5 scroll ml-2" style="max-height:170px;overflow-y:auto"></div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- 通用弹窗 -->
+<div id="mroot" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+  <div class="bg-white rounded-xl card w-full max-w-md p-5">
+    <h3 id="mtitle" class="text-base font-bold mb-4"></h3>
+    <div id="mbody"></div>
+    <div class="mt-5 flex justify-end gap-2">
+      <button id="mc" class="es px-4 h-9 rounded-lg border border-slate-200 text-sm hover:bg-gray-100">取消</button>
+      <button id="mok" class="es px-4 h-9 rounded-lg bg-slate-900 text-white text-sm hover:opacity-90">确定</button>
+    </div>
+  </div>
+</div>
+
+<!-- 次日自动报告弹窗 -->
+<div id="yrepOv" class="hidden fixed inset-0 z-[70] flex items-center justify-center px-4 py-6 bg-black/50">
+  <div class="bg-white w-[500px] max-w-full rounded-xl overflow-hidden shadow-2xl flex flex-col" style="max-height:88vh">
+    <div class="px-5 py-3.5 bg-[#1e40af] text-white text-lg font-bold flex items-center gap-2 shrink-0">📊 昨日回顾<span id="yrepWhen" class="ml-auto text-base font-normal opacity-90"></span></div>
+    <div class="overflow-y-auto scroll px-5 py-4 space-y-6" id="yrepBody">
+      <div><div class="text-sm font-bold text-slate-800 mb-2">📈 项目进度</div><div id="yrepProj" class="space-y-3"></div></div>
+      <div><div class="text-sm font-bold text-slate-800 mb-2">🕐 昨日时间轴</div><div id="yrepTl" class="space-y-1"></div></div>
+    </div>
+    <div class="px-5 py-3 border-t border-slate-100 shrink-0">
+      <button id="yrepClose" class="es w-full h-10 rounded-lg bg-[#1e40af] text-white text-sm hover:opacity-90">已完成，关闭</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const PRI={P0:{b:"#fee2e2",c:"#b91c1c"},P1:{b:"#ffedd5",c:"#c2410c"},P2:{b:"#f3e8ff",c:"#7e22ce"}};
+const PAL=["#3b82f6","#a855f7","#22c55e","#f59e0b","#ef4444","#06b6d4","#ec4899","#64748b"];
+const GRAY="#9ca3af";
+let user=null,proj=[],tasks=[],pie=null,dragId=null,vd=new Date(),curLogs=[];
+const $=s=>document.querySelector(s),$$=s=>Array.from(document.querySelectorAll(s));
+const gid=id=>document.getElementById(id);
+const pad=n=>String(n).padStart(2,"0");
+const fdate=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+const cfmt=s=>s?s.split("-")[0]+"."+Number(s.split("-")[1])+"."+Number(s.split("-")[2]):"";
+const clk=v=>String(v==null?"":v).slice(0,5);
+const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const durtxt=m=>{m=Number(m)||0;if(m<60)return m+"分钟";let h=m/60;return(Number.isInteger(h)?h:h.toFixed(1))+"小时";};
+function toast(msg){const t=document.createElement("div");t.textContent=msg;t.className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] text-sm px-4 py-2 rounded bg-slate-900 text-white";document.body.append(t);setTimeout(()=>t.remove(),2200);}
+
+/* 弹窗 */
+let okFn=null;
+function openM(title,html,fn,ok){gid("mtitle").textContent=title;gid("mbody").innerHTML=html;okFn=fn||null;gid("mok").textContent=ok||"确定";gid("mroot").classList.remove("hidden");}
+function closeM(){gid("mroot").classList.add("hidden");okFn=null;}
+gid("mc").onclick=closeM;
+gid("mok").onclick=async()=>{if(!okFn)return closeM();const r=await okFn();if(r!==false)closeM();};
+gid("mroot").addEventListener("click",e=>{if(e.target.id==="mroot")closeM();});
+
+/* 认证 */
+function showAuth(){const a=gid("auth");a.classList.remove("hidden");a.classList.add("flex");}
+async function auth(kind){
+  const email=gid("em").value.trim(),pw=gid("pw").value;
+  if(!email||!pw)return gid("emsg").textContent="请输入邮箱与密码";
+  gid("emsg").textContent="";
+  const {data,error}=kind==="in"?await supabase.auth.signInWithPassword({email,password:pw}):await supabase.auth.signUp({email,password:pw});
+  if(error){gid("emsg").textContent=(kind==="in"?"登录失败：":"注册失败：")+error.message;return;}
+  gid("pw").value="";
+  if(kind==="up"&&!data.session)return gid("emsg").textContent="注册成功，请到邮箱确认后再登录。";
+  enter((data.session&&data.session.user)||data.user);
+}
+function enter(u){if(!u)return;user=u;const a=gid("auth");a.classList.add("hidden");a.classList.remove("flex");const b=gid("bar");b.classList.add("flex");b.style.display="flex";gid("uemail").textContent=u.email||"";vd=new Date();loadme();}
+gid("bIn").onclick=()=>auth("in");
+gid("bUp").onclick=()=>auth("up");
+gid("out").onclick=async()=>{await supabase.auth.signOut();location.reload();};
+["em","pw"].forEach(i=>gid(i).addEventListener("keydown",e=>{if(e.key==="Enter")auth("in");}));
+
+/* 数据 */
+function gp(id){return proj.find(p=>p.id===id);}
+async function loadPT(){
+  const [p,t]=await Promise.all([
+    supabase.from("projects").select("id,name,color").order("created_at",{ascending:true}),
+    supabase.from("tasks").select("id,project_id,title,priority,due_date,status,reflection").order("created_at",{ascending:true})
+  ]);
+  if(p.error)throw p.error;if(t.error)throw t.error;
+  proj=p.data||[];tasks=t.data||[];
+}
+/* 时间轴与饼图共用：读取当日 time_logs */
+async function loadDay(){
+  if(!user)return;
+  const d=fdate(vd);gid("vday").textContent=cfmt(d);
+  const {data,error}=await supabase.from("time_logs").select("id,project_id,date,start_time,end_time,duration_minutes,activity")
+    .eq("date",d).order("start_time",{ascending:true});
+  if(error){toast("读取失败："+error.message);return;}
+  paintTl(data||[]);paintPie(data||[]);
+}
+/* 时间轴：按时间顺序列块，显示 活动名+时长 */
+function paintTl(logs){
+  const w=gid("tl");
+  curLogs=logs||[];
+  if(!logs.length){w.innerHTML='<p class="text-sm text-gray-400 text-center pt-10">当天暂无时间记录<br/>点下方按钮添加。</p>';return;}
+  let h=logs.map(l=>{
+    const p=gp(l.project_id),c=p?p.color:GRAY,pn=p?p.name:"未分组";
+    return '<div class="bg-white border border-slate-200 rounded-xl p-2.5 relative group">'
+      +'<div class="flex items-start gap-2.5"><span class="mt-1 w-2.5 h-2.5 rounded-full shrink-0" style="background:'+c+'"></span>'
+      +'<div class="flex-1 min-w-0"><div class="flex justify-between gap-2 items-center"><span class="text-sm font-medium break-words">'+esc(l.activity||"未命名活动")+'</span>'
+      +'<span class="text-xs shrink-0 px-1.5 py-0.5 rounded-full" style="background:'+c+'1a;color:'+c+'">'+durtxt(l.duration_minutes)+'</span></div>'
+      +'<div class="text-[11px] text-gray-400 mt-1">'+clk(l.start_time)+' – '+clk(l.end_time)+' · '+esc(pn)+'</div></div>'
+      +'<div class="absolute right-1.5 top-1.5 hidden group-hover:block text-[10px]"><button data-eid="'+l.id+'" class="text-gray-400 hover:text-blue-600 block">编辑</button><button data-dl="'+l.id+'" class="text-gray-400 hover:text-red-600 block">删除</button></div>'
+      +'</div></div>';
+  }).join("");
+  const tot=logs.reduce((s,l)=>s+(Number(l.duration_minutes)||0),0);
+  h+='<div class="text-[11px] text-gray-400 text-right">合计 '+durtxt(tot)+'</div>';
+  w.innerHTML=h;
+}
+/* 饼图：按项目聚合当日总时长 */
+function paintPie(logs){
+  const agg={};(logs||[]).forEach(l=>{const k=l.project_id||"_";agg[k]=(agg[k]||0)+(Number(l.duration_minutes)||0);});
+  const rows=Object.keys(agg).map(id=>{const p=id==="_"?null:gp(id);return{name:p?p.name:"未分组",color:p?p.color:GRAY,h:agg[id]/60,m:agg[id]};});
+  if(pie)pie.destroy();
+  if(!rows.length){pie=new Chart(gid("pie"),{type:"pie",data:{labels:["无"],datasets:[{data:[1],backgroundColor:["#e5e7eb"]}]},options:{responsive:false}});gid("pieL").innerHTML='<p class="text-gray-400">当天暂无记录</p>';return;}
+  pie=new Chart(gid("pie"),{type:"pie",data:{labels:rows.map(r=>r.name),datasets:[{data:rows.map(r=>r.h),backgroundColor:rows.map(r=>r.color),borderWidth:0}]},options:{responsive:false}});
+  gid("pieL").innerHTML=rows.map(r=>'<div class="flex justify-between gap-1"><span class="flex items-center gap-1.5 min-w-0"><span class="w-2 h-2 rounded-full shrink-0" style="background:'+r.color+'"></span><span class="truncate">'+esc(r.name)+'</span></span><span class="text-gray-400 shrink-0">'+durtxt(r.m)+'</span></div>').join("");
+}
+
+/* 项目 + 任务渲染 */
+function rProj(){
+  const el=gid("plist");
+  if(!proj.length){el.innerHTML='<p class="text-sm text-gray-400 text-center py-6">还没有项目</p>';return;}
+  el.innerHTML=proj.map(p=>{
+    const n=tasks.filter(t=>t.project_id===p.id&&t.status==="doing").length;
+    return '<div class="group flex bg-gray-50 rounded-lg overflow-hidden hover:border hover:border-slate-200 es"><div class="w-1.5 shrink-0" style="background:'+p.color+'"></div><div class="flex-1 px-3 py-1.5 min-w-0"><div class="text-sm font-medium truncate">'+esc(p.name)+'</div><div class="text-xs text-gray-400">'+n+' 个任务进行中</div></div><button data-dp="'+p.id+'" class="es opacity-0 group-hover:opacity-100 px-2 text-gray-300 hover:text-red-500">×</button></div>';
+  }).join("");
+}
+function card(t){
+  const p=gp(t.project_id),pr=PRI[t.priority]||PRI.P2,done=t.status==="done",due=t.due_date?t.due_date.replace(/-/g,"/"):"无截止",c=p?p.color:GRAY,pn=p?p.name:"未分组";
+  return '<article class="task bg-white border border-slate-200 rounded-lg p-3 card" draggable="true" data-id="'+t.id+'">'
+    +'<div class="text-sm font-medium break-words">'+esc(t.title)+'</div>'
+    +'<div class="mt-2 flex gap-1.5 items-center text-xs"><span class="px-1.5 py-0.5 rounded font-medium" style="background:'+pr.b+';color:'+pr.c+'">'+(t.priority||"P2")+'</span><span class="text-gray-400">'+esc(due)+'</span></div>'
+    +'<div class="mt-2 flex items-center gap-1.5 text-xs text-gray-500"><span class="w-2 h-2 rounded-full" style="background:'+c+'"></span><span class="truncate">'+esc(pn)+'</span></div>'
+    +(done?'<div class="mt-2 pt-2 border-t border-slate-100"><button type="button" class="rf text-[11px] '+(t.reflection?"text-green-600":"text-gray-400")+'">反思'+(t.reflection?" ✓":"")+'</button><textarea data-rid="'+t.id+'" class="hidden mt-1 w-full text-xs rounded border border-green-200 p-2 min-h-14" placeholder="写点反思…">'+esc(t.reflection||"")+'</textarea></div>':"")
+    +'</article>';
+}
+function rTasks(){
+  ["todo","doing","done"].forEach(st=>{
+    const sec=document.querySelector('[data-status="'+st+'"]').closest("section");
+    sec.querySelector(".cnt").textContent=tasks.filter(t=>t.status===st).length;
+    const area=sec.querySelector("[data-status]");const list=tasks.filter(t=>t.status===st);
+    area.innerHTML=list.length?list.map(card).join(""):'<p class="text-sm text-gray-400 text-center py-8">暂无任务</p>';
+  });
+  bindDrag();bindRef();
+}
+function bindDrag(){$$(".task").forEach(t=>{t.ondragstart=e=>{dragId=t.dataset.id;t.classList.add("drag");e.dataTransfer.setData("text",dragId);e.dataTransfer.effectAllowed="move";};t.ondragend=()=>{t.classList.remove("drag");dragId=null;$$(".drop").forEach(c=>c.classList.remove("ok"));};});}
+function bindRef(){$$(".rf").forEach(b=>b.onclick=e=>{e.stopPropagation();const ta=b.closest("article").querySelector("textarea");if(!ta)return;ta.classList.toggle("hidden");if(!ta.classList.contains("hidden"))ta.focus();});$$("textarea[data-rid]").forEach(ta=>ta.oninput=async()=>{await supabase.from("tasks").update({reflection:ta.value}).eq("id",ta.dataset.rid);});}
+function bindCols(){$$(".drop").forEach(col=>{col.addEventListener("dragover",e=>{e.preventDefault();col.classList.add("ok");});col.addEventListener("dragleave",()=>col.classList.remove("ok"));col.addEventListener("drop",async e=>{e.preventDefault();col.classList.remove("ok");const id=e.dataTransfer.getData("text")||dragId;const t=tasks.find(x=>x.id===id);if(!t)return;const nx=col.dataset.status;if(t.status===nx)return;const old=t.status;t.status=nx;rTasks();const {error}=await supabase.from("tasks").update({status:nx}).eq("id",id);if(error){t.status=old;rTasks();toast("更新失败");}else{rProj();}});});}
+async function loadme(){if(!user)return;try{await loadPT();}catch(e){toast("加载失败："+e.message);}rTasks();rProj();await loadDay();maybeReport();}
+
+/* 日期联动 */
+async function shift(n){const d=new Date(vd);d.setDate(d.getDate()+n);vd=d;await loadDay();}
+$$("[data-day]").forEach(b=>b.onclick=()=>shift(Number(b.dataset.day)));
+gid("btoday").onclick=async()=>{vd=new Date();await loadDay();};
+
+/* ===== 时间轴时间块 modal（写 time_logs，提交后重渲染时间轴+饼图） ===== */
+function tmHTML(row){
+  const ops=proj.map(p=>'<option value="'+p.id+'"'+(row&&row.pid===p.id?" selected":"")+'>'+esc(p.name)+'</option>').join("");
+  return '<p class="text-xs text-gray-400 mb-2">日期：'+cfmt(fdate(vd))+'</p>'
+    +'<label class="block text-sm mb-1">项目</label><select id="tmP" class="w-full h-10 rounded border border-slate-200 px-2 text-sm bg-white">'+ops+'</select>'
+    +'<label class="block text-sm mt-3 mb-1">开始时间</label><input id="tmS" type="time" class="w-full h-10 rounded border border-slate-200 px-2 text-sm" value="'+(row?row.s:"09:00")+'"/>'
+    +'<label class="block text-sm mt-3 mb-1">结束时间</label><input id="tmE" type="time" class="w-full h-10 rounded border border-slate-200 px-2 text-sm" value="'+(row?row.e:"10:00")+'"/>'
+    +'<label class="block text-sm mt-3 mb-1">活动名称</label><input id="tmA" class="w-full h-10 rounded border border-slate-200 px-2 text-sm" value="'+(row?esc(row.a):"")+'" placeholder="例如：深度工作"/>';
+}
+function collectTm(){
+  const pid=gid("tmP").value,s=gid("tmS").value,e=gid("tmE").value,a=gid("tmA").value.trim();
+  if(!s||!e)return{err:"请填写开始和结束时间"};
+  const sm=Number(s.slice(0,2))*60+Number(s.slice(3,5)),em=Number(e.slice(0,2))*60+Number(e.slice(3,5));
+  if(em<=sm)return{err:"结束时间须晚于开始时间"};
+  if(!a)return{err:"请填写活动名称"};
+  return{pid,s,e,a,dur:em-sm};
+}
+function newBlock(){if(!proj.length){toast("请先创建项目");return;}openM("添加时间块（time_logs）",tmHTML(null),async()=>{const v=collectTm();if(v.err){toast(v.err);return false;}const {error}=await supabase.from("time_logs").insert({user_id:user.id,date:fdate(vd),project_id:v.pid,start_time:v.s,end_time:v.e,activity:v.a,duration_minutes:v.dur});if(error){toast("添加失败："+error.message);return false;}await loadDay();},"添加");}
+function editBlock(rw){openM("编辑时间块",tmHTML(rw),async()=>{const v=collectTm();if(v.err){toast(v.err);return false;}const {error}=await supabase.from("time_logs").update({project_id:v.pid,start_time:v.s,end_time:v.e,activity:v.a,duration_minutes:v.dur}).eq("id",rw.id);if(error){toast("保存失败："+error.message);return false;}await loadDay();},"保存");}
+function delBlock(id){if(!confirm("确定删除该时间块？"))return;supabase.from("time_logs").delete().eq("id",id).then(()=>loadDay());}
+gid("addTimeBtn").onclick=()=>{if(!user)return;newBlock();};
+
+/* 项目/任务 新增 */
+gid("addP").onclick=()=>{if(!user)return;openM("添加项目",'<label class="block text-sm mb-1">名称</label><input id="pN" class="w-full h-10 rounded border border-slate-200 px-3 text-sm"/><label class="block text-sm mt-3 mb-1">颜色</label><input id="pC" type="color" value="'+PAL[proj.length%PAL.length]+'"/>',async()=>{const n=gid("pN").value.trim();if(!n)return false;const {error}=await supabase.from("projects").insert({user_id:user.id,name:n,color:gid("pC").value});if(error){toast("失败："+error.message);return false;}await loadme();},"创建");};
+$$("[data-at]").forEach(btn=>btn.addEventListener("click",()=>{
+  if(!user)return;if(!proj.length){toast("请先创建项目");return;}
+  const st=btn.dataset.at;const ops=proj.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join("");
+  openM("添加任务",'<label class="block text-sm mb-1">标题</label><input id="tT" class="w-full h-10 rounded border border-slate-200 px-3 text-sm"/><label class="block text-sm mt-3 mb-1">项目</label><select id="tP" class="w-full h-10 rounded border border-slate-200 px-2 text-sm bg-white">'+ops+'</select><label class="block text-sm mt-3 mb-1">优先级</label><select id="tR" class="w-full h-10 rounded border border-slate-200 px-2 text-sm bg-white"><option>P0</option><option selected>P1</option><option>P2</option></select><label class="block text-sm mt-3 mb-1">截止日期</label><input id="tD" type="date" class="w-full h-10 rounded border border-slate-200 px-2 text-sm"/>',
+  async()=>{const tt=gid("tT").value.trim();if(!tt)return false;const {error}=await supabase.from("tasks").insert({user_id:user.id,project_id:gid("tP").value,title:tt,priority:gid("tR").value,due_date:gid("tD").value||null,status:st,reflection:""});if(error){toast("失败："+error.message);return false;}await loadme();},"添加");
+}));
+
+/* 事件委托：编辑/删除时间块、删除项目（避免 innerHTML 重排后失效） */
+document.addEventListener("click",function(ev){
+  const eb=ev.target.closest("[data-eid]");
+  if(eb){const id=eb.dataset.eid;const l=(curLogs||[]).find(x=>String(x.id)===String(id));if(l){editBlock({id:l.id,pid:l.project_id,s:clk(l.start_time),e:clk(l.end_time),a:(l.activity||"")});}return;}
+  const dl=ev.target.closest("[data-dl]");
+  if(dl){delBlock(dl.dataset.dl);return;}
+  const dp=ev.target.closest("[data-dp]");
+  if(dp){if(!confirm("删除该项目？其任务与时间纪录将一并删除"))return;
+    (async()=>{const id=dp.dataset.dp;await supabase.from("tasks").delete().eq("project_id",id);await supabase.from("time_logs").delete().eq("project_id",id);const {error}=await supabase.from("projects").delete().eq("id",id);if(!error)await loadme();else toast("删除失败："+error.message);})();
+    return;}
+});
+
+/* ===== 次日自动报告弹窗 ===== */
+let _curY=null;
+function closeYrep(){if(_curY)try{localStorage.setItem("yrepSeen:"+_curY,"1");}catch(e){}gid("yrepOv").classList.add("hidden");}
+function yProj(){
+  if(!proj.length)return '<p class="text-xs text-gray-400">暂无项目</p>';
+  return proj.map(p=>{
+    const all=tasks.filter(x=>x.project_id===p.id);
+    const dn=all.filter(x=>x.status==="done").length,tot=all.length;
+    const pct=tot?Math.round(dn/tot*100):0;
+    const open=all.filter(x=>x.status!=="done").sort((a,b)=>((a.due_date||"9999").localeCompare(b.due_date||"9999")));
+    const nx=open[0];
+    let nxh;
+    if(!tot)nxh='<span class="text-gray-400">无任务</span>';
+    else if(dn===tot)nxh='<span class="text-green-600 font-medium">✓ 全部完成 🎉</span>';
+    else if(!nx)nxh='<span class="text-gray-400">暂无待办任务</span>';
+    else{const dd=nx.due_date?String(nx.due_date).replace(/-/g,".")+" 截止":"未设截止";nxh=esc(nx.title)+' <span class="text-gray-400">（'+dd+'）</span>';}
+    return '<div class="flex items-start gap-2">'
+      +'<span class="w-2.5 h-2.5 rounded-full mt-1.5 shrink-0" style="background:'+p.color+'"></span>'
+      +'<div class="flex-1 min-w-0">'
+      +'<div class="flex items-baseline gap-2"><span class="text-sm font-medium truncate">'+esc(p.name)+'</span><span class="text-xs text-gray-400 shrink-0">'+dn+'/'+tot+'</span></div>'
+      +'<div class="flex items-center gap-2 mt-1"><div class="h-2 flex-1 bg-slate-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:'+pct+'%;background:'+p.color+'"></div></div><span class="text-[10px] text-gray-400 w-9 text-right">'+pct+'%</span></div>'
+      +'<div class="text-[11px] text-gray-500 mt-1 break-words">下一步：'+nxh+'</div>'
+      +'</div></div>';
+  }).join("");
+}
+function yTl(logs){
+  if(!logs||!logs.length)return '<p class="text-xs text-gray-400">昨日暂无时间记录</p>';
+  return logs.map(l=>{const p=gp(l.project_id),c=p?p.color:GRAY;return '<div class="flex items-stretch rounded-md overflow-hidden bg-slate-50 border border-slate-100"><span class="w-1.5 shrink-0" style="background:'+c+'"></span><span class="px-2 py-1.5 text-[11px] text-gray-400 whitespace-nowrap">'+clk(l.start_time)+'–'+clk(l.end_time)+'</span><span class="px-2 py-1.5 text-xs font-medium truncate flex-1">'+esc(l.activity||"未命名")+'</span><span class="px-2 py-1.5 text-[11px] text-gray-400 whitespace-nowrap">'+durtxt(l.duration_minutes)+'</span></div>';}).join("");
+}
+async function maybeReport(){
+  if(!user||typeof supabase==="undefined")return;
+  const d=new Date();d.setDate(d.getDate()-1);const ys=fdate(d);
+  try{if(localStorage.getItem("yrepSeen:"+ys))return;}catch(e){}
+  let n=0;
+  try{const r=await supabase.from("time_logs").select("id",{count:"exact",head:true}).eq("date",ys);if(r.error)return;n=r.count||0;}catch(e){return;}
+  if(!n)return;
+  let lgs=[];
+  try{const r2=await supabase.from("time_logs").select("id,project_id,start_time,end_time,duration_minutes,activity").eq("date",ys).order("start_time",{ascending:true});if(r2.error)return;lgs=r2.data||[];}catch(e){return;}
+  _curY=ys;
+  gid("yrepWhen").textContent=cfmt(ys);
+  gid("yrepProj").innerHTML=yProj();
+  gid("yrepTl").innerHTML=yTl(lgs);
+  gid("yrepOv").classList.remove("hidden");
+}
+gid("yrepClose").addEventListener("click",closeYrep);
+gid("yrepOv").addEventListener("click",e=>{if(e.target.id==="yrepOv")closeYrep();});
+bindCols();
+/* 启动：恢复会话 */
+(async function(){const {data}=await supabase.auth.getSession();if(data.session){enter(data.session.user);}else{showAuth();}})();
+</script>
+<script>
+if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(err){console.warn("SW register failed",err);});});}
+</script>
+</body>
+</html>

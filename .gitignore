@@ -1,0 +1,12 @@
+# 备份 / 本地产物不入库
+index.html.bak-localui
+*.bak
+*.local
+
+# 系统文件
+Thumbs.db
+.DS_Store
+
+# 提示：config.js 含 Supabase URL 与 anon key。
+# anon key 本属“公开只读键”，前端需在浏览器可见，因此保留入库即可。
+# 若后续希望密钥只存在 Vercel 环境变量，请把 config.js 移出并改为服务端注入模板。
