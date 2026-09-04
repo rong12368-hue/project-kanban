@@ -145,7 +145,10 @@ const cfmt=s=>s?s.split("-")[0]+"."+Number(s.split("-")[1])+"."+Number(s.split("
 const clk=v=>String(v==null?"":v).slice(0,5);
 const esc=s=>String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 const durtxt=m=>{m=Number(m)||0;if(m<60)return m+"分钟";let h=m/60;return(Number.isInteger(h)?h:h.toFixed(1))+"小时";};
-function toast(msg){const t=document.createElement("div");t.textContent=msg;t.className="fixed top-4 left-1/2 -translate-x-1/2 z-[80] text-sm px-4 py-2 rounded bg-slate-900 text-white";document.body.append(t);setTimeout(()=>t.remove(),2200);}
+function toast(msg){const t=document.createElement("div");t.textContent=msg;t.className="fixed top-4 left-1/2 -translate-x-1/2 z-[90] text-sm px-4 py-2 rounded bg-slate-900 text-white max-w-[92vw] break-words";document.body.append(t);setTimeout(()=>t.remove(),4000);}
+/* 显示未捕获错误，便于定位「点击无反应」的真因 */
+window.addEventListener("error",e=>{try{toast("⚠ 脚本错误: "+(e.message||"未知"));}catch(_){}});
+window.addEventListener("unhandledrejection",e=>{try{const r=e.reason;toast("⚠ 异步错误: "+((r&&r.message)||"未知"));}catch(_){}});
 
 /* 弹窗 */
 let okFn=null;
@@ -278,12 +281,12 @@ function collectTm(){
 function newBlock(){if(!proj.length){toast("请先创建项目");return;}openM("添加时间块（time_logs）",tmHTML(null),async()=>{const v=collectTm();if(v.err){toast(v.err);return false;}const {error}=await supabase.from("time_logs").insert({user_id:user.id,date:fdate(vd),project_id:v.pid,start_time:v.s,end_time:v.e,activity:v.a,duration_minutes:v.dur});if(error){toast("添加失败："+error.message);return false;}await loadDay();},"添加");}
 function editBlock(rw){openM("编辑时间块",tmHTML(rw),async()=>{const v=collectTm();if(v.err){toast(v.err);return false;}const {error}=await supabase.from("time_logs").update({project_id:v.pid,start_time:v.s,end_time:v.e,activity:v.a,duration_minutes:v.dur}).eq("id",rw.id);if(error){toast("保存失败："+error.message);return false;}await loadDay();},"保存");}
 function delBlock(id){if(!confirm("确定删除该时间块？"))return;supabase.from("time_logs").delete().eq("id",id).then(()=>loadDay());}
-gid("addTimeBtn").onclick=()=>{if(!user)return;newBlock();};
+gid("addTimeBtn").onclick=()=>{if(!user){toast("尚未登录或会话失效，请先登录");return;}newBlock();};
 
 /* 项目/任务 新增 */
-gid("addP").onclick=()=>{if(!user)return;openM("添加项目",'<label class="block text-sm mb-1">名称</label><input id="pN" class="w-full h-10 rounded border border-slate-200 px-3 text-sm"/><label class="block text-sm mt-3 mb-1">颜色</label><input id="pC" type="color" value="'+PAL[proj.length%PAL.length]+'"/>',async()=>{const n=gid("pN").value.trim();if(!n)return false;const {error}=await supabase.from("projects").insert({user_id:user.id,name:n,color:gid("pC").value});if(error){toast("失败："+error.message);return false;}await loadme();},"创建");};
+gid("addP").onclick=()=>{if(!user){toast("尚未登录或会话失效，请先登录");return;}openM("添加项目",'<label class="block text-sm mb-1">名称</label><input id="pN" class="w-full h-10 rounded border border-slate-200 px-3 text-sm"/><label class="block text-sm mt-3 mb-1">颜色</label><input id="pC" type="color" value="'+PAL[proj.length%PAL.length]+'"/>',async()=>{const n=gid("pN").value.trim();if(!n)return false;const {error}=await supabase.from("projects").insert({user_id:user.id,name:n,color:gid("pC").value});if(error){toast("失败："+error.message);return false;}await loadme();},"创建");};
 $$("[data-at]").forEach(btn=>btn.addEventListener("click",()=>{
-  if(!user)return;if(!proj.length){toast("请先创建项目");return;}
+  if(!user){toast("尚未登录或会话失效，请先登录");return;}if(!proj.length){toast("请先创建项目");return;}
   const st=btn.dataset.at;const ops=proj.map(p=>'<option value="'+p.id+'">'+esc(p.name)+'</option>').join("");
   openM("添加任务",'<label class="block text-sm mb-1">标题</label><input id="tT" class="w-full h-10 rounded border border-slate-200 px-3 text-sm"/><label class="block text-sm mt-3 mb-1">项目</label><select id="tP" class="w-full h-10 rounded border border-slate-200 px-2 text-sm bg-white">'+ops+'</select><label class="block text-sm mt-3 mb-1">优先级</label><select id="tR" class="w-full h-10 rounded border border-slate-200 px-2 text-sm bg-white"><option>P0</option><option selected>P1</option><option>P2</option></select><label class="block text-sm mt-3 mb-1">截止日期</label><input id="tD" type="date" class="w-full h-10 rounded border border-slate-200 px-2 text-sm"/>',
   async()=>{const tt=gid("tT").value.trim();if(!tt)return false;const {error}=await supabase.from("tasks").insert({user_id:user.id,project_id:gid("tP").value,title:tt,priority:gid("tR").value,due_date:gid("tD").value||null,status:st,reflection:""});if(error){toast("失败："+error.message);return false;}await loadme();},"添加");
