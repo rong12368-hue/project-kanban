@@ -5,6 +5,7 @@ const PRECACHE = [
   './index.html',
   './config.js',
   './manifest.json',
+  './libs/supabase.umd.js',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/maskable-512.png'
