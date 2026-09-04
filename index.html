@@ -28,6 +28,19 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f7f
 .drop.ok[data-status=todo]{outline:2px dashed #3b82f6}
 .drop.ok[data-status=doing]{outline:2px dashed #a855f7}
 .drop.ok[data-status=done]{outline:2px dashed #22c55e}
+/* ===== 移动端（<881px）：纵向流式排版，避免横向溢出被截断 ===== */
+@media (max-width:881px){
+  html,body{height:auto !important;overflow:auto !important;-webkit-overflow-scrolling:touch}
+  body{display:block}
+  #lay{flex-direction:column !important;height:auto !important;min-height:0 !important;padding:10px;gap:12px}
+  #bar{position:sticky;top:0;z-index:40}
+  #pcol{width:auto !important;max-width:none !important}
+  #mcols{flex-direction:column !important;width:100% !important;align-items:stretch}
+  #mcols>section{width:100% !important;min-height:180px;height:auto;margin:0}
+  #mcols>section>.drop{max-height:320px;overflow-y:auto}
+  #tcol{width:auto !important;max-width:none !important;flex-direction:column}
+  .card{box-shadow:none}
+}
 </style>
 </head>
 <body class="h-screen overflow-hidden">
@@ -55,17 +68,17 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f7f
   <button id="out" type="button" class="es px-3 h-7 rounded-lg border border-slate-200 text-xs hover:bg-gray-100">退出登录</button></span>
 </div>
 
-<div class="flex gap-4 p-4" style="height:calc(100% - 40px)">
+<div id="lay" class="flex gap-4 p-4" style="height:calc(100% - 40px)">
 
   <!-- 项目栏 -->
-  <aside class="w-64 flex flex-col min-h-0 bg-white rounded-lg border border-slate-200 card overflow-hidden">
+  <aside id="pcol" class="w-64 flex flex-col min-h-0 bg-white rounded-lg border border-slate-200 card overflow-hidden">
     <div class="px-4 py-3 border-b border-slate-100 font-semibold text-sm">我的项目</div>
     <div id="plist" class="flex-1 overflow-y-auto scroll p-2 space-y-2"></div>
     <div class="p-2 border-t border-slate-100"><button id="addP" type="button" class="es w-full h-9 rounded-lg border border-dashed border-slate-300 text-xl text-gray-400 hover:border-blue-500 hover:text-blue-500">+</button></div>
   </aside>
 
   <!-- 任务看板 -->
-  <main class="flex-1 min-w-0 flex gap-3">
+  <main id="mcols" class="flex-1 min-w-0 flex gap-3">
     <section class="w-1/3 bg-white rounded-lg border border-slate-200 card flex flex-col min-h-0 overflow-hidden">
       <header class="flex items-center gap-2 px-4 py-3 border-b border-slate-100"><span class="w-2 h-2 rounded bg-blue-500"></span><span class="text-sm font-semibold">待办</span><span class="cnt ml-auto min-w-5 text-center text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-600">0</span><button data-at="todo" class="es ml-1 w-6 text-gray-400 hover:text-blue-600">+</button></header>
       <div data-status="todo" class="drop scroll flex-1 overflow-y-auto p-2 space-y-2"></div>
@@ -81,7 +94,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f7f
   </main>
 
   <!-- 时间轴 + 饼图 -->
-  <aside class="w-96 flex flex-col gap-3 min-h-0">
+  <aside id="tcol" class="w-96 flex flex-col gap-3 min-h-0">
     <div class="flex-1 min-h-0 bg-white rounded-lg border border-slate-200 card flex flex-col overflow-hidden">
       <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
         <h2 class="font-semibold text-sm">每日时间轴</h2>
