@@ -106,7 +106,7 @@ body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f7f
         </div>
       </div>
       <div id="tl" class="scroll flex-1 overflow-y-auto p-3 space-y-2"></div>
-      <div class="p-2 border-t border-slate-100"><button id="addTimeBtn" type="button" class="es w-full h-10 rounded-xl bg-slate-900 text-white text-sm">+ 添加时间块</button></div>
+      <div class="p-2 border-t border-slate-100"><div id="tmrBar" class="hidden text-[11px] text-blue-700 bg-blue-50 mb-2 rounded-md px-2 py-1.5"></div><button id="tmrBtn" type="button" class="es w-full h-10 rounded-xl bg-blue-600 text-white text-sm mb-2">开始计时</button><button id="addTimeBtn" type="button" class="es w-full h-10 rounded-xl bg-slate-900 text-white text-sm">+ 添加时间块</button></div>
     </div>
     <div class="bg-white rounded-lg border border-slate-200 card p-3">
       <h2 class="text-sm font-semibold mb-2">当日时间分布</h2>
@@ -370,5 +370,5 @@ bindCols();
 <script>
 if("serviceWorker" in navigator){window.addEventListener("load",function(){navigator.serviceWorker.register("./sw.js").catch(function(err){console.warn("SW register failed",err);});});}
 </script>
-</body>
+<script src="./app-extra.js"></script></body></body>
 </html>
